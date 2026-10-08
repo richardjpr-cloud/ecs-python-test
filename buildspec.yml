@@ -4,20 +4,29 @@ phases:
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
-      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - AWS_REGION=$AWS_DEFAULT_REGION
-      - ECR_REPOSITORY=python-test
-      - ECR_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+      - aws --version
+      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 056611633396.dkr.ecr.ap-south-1.amazonaws.com
+      - REPOSITORY_URI=056611633396.dkr.ecr.ap-south-1.amazonaws.com/python-test
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
 
   build:
     commands:
+      - echo Build started on `date`
       - echo Building Docker image...
-      - docker build -t $ECR_REPOSITORY:latest .
-      - docker tag $ECR_REPOSITORY:latest $ECR_URI:latest
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
 
   post_build:
     commands:
-      - echo Pushing image to ECR...
-      - docker push $ECR_URI:latest
-      - echo Docker image pushed successfully
+      - echo Build completed on `date`
+      - echo Pushing Docker image...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Creating imagedefinitions.json...
+      - DOCKER_CONTAINER_NAME=python-test
+      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
